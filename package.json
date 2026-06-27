@@ -1,0 +1,16 @@
+{
+  "name": "line-calendar-bot",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@line/bot-sdk": "^9.3.0",
+    "@google-cloud/local-auth": "^3.0.1",
+    "express": "^4.18.2",
+    "googleapis": "^140.0.0",
+    "@google/generative-ai": "^0.21.0",
+    "dotenv": "^16.4.5"
+  }
+}
