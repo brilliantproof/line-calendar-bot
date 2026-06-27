@@ -21,6 +21,10 @@ async function addUserEmail(userId, email) {
 }
 
 async function getUserEmails(contextId) {
+  // 優先從環境變數讀取（永久保存），其次從本機檔案
+  if (process.env.MEMBER_EMAILS) {
+    return process.env.MEMBER_EMAILS.split(',').map(e => e.trim()).filter(Boolean);
+  }
   const db = loadDB();
   return Object.values(db);
 }
