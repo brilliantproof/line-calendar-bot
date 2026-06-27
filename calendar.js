@@ -26,8 +26,9 @@ async function getUserEmails(contextId) {
 }
 
 function getCalendarClient() {
-  const keyPath = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_PATH;
-  const credentials = JSON.parse(fs.readFileSync(keyPath, 'utf8'));
+  const credentials = process.env.GOOGLE_SERVICE_ACCOUNT_KEY
+    ? JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY)
+    : JSON.parse(fs.readFileSync(process.env.GOOGLE_SERVICE_ACCOUNT_KEY_PATH, 'utf8'));
 
   const auth = new google.auth.GoogleAuth({
     credentials,
