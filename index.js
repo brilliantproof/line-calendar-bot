@@ -15,12 +15,23 @@ const client = new line.messagingApi.MessagingApiClient({
   channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
 });
 
+app.get('/health', (req, res) => {
+  res.json({ ok: true });
+});
+
 app.post('/webhook', line.middleware(lineConfig), async (req, res) => {
   res.status(200).end();
-  const events = req.body.events;
+  const events = req.body.events || [];
+  console.log(`[webhook] received ${events.length} event(s)`);
+
   for (const event of events) {
     if (event.type !== 'message' || event.message.type !== 'text') continue;
-    await handleMessage(event);
+
+    try {
+      await handleMessage(event);
+    } catch (err) {
+      console.error('[webhook] failed to handle message:', err);
+    }
   }
 });
 
@@ -29,6 +40,8 @@ async function handleMessage(event) {
   const replyToken = event.replyToken;
   const userId = event.source.userId;
   const groupId = event.source.groupId || event.source.roomId || null;
+
+  console.log(`[message] ${text}`);
 
   // 指令：登記 email
   if (text.startsWith('/register ')) {
@@ -49,7 +62,12 @@ async function handleMessage(event) {
 
   // 解析行程
   const parsed = await parseEvent(text);
-  if (!parsed) return; // 不像行程就忽略
+  if (!parsed) {
+    console.log('[message] no calendar event detected');
+    return reply(replyToken, '我還沒讀到明確的日期或時間。請試試：「明天下午 3 點和王小明開會」');
+  }
+
+  console.log('[calendar] parsed event:', parsed);
 
   try {
     const emails = await getUserEmails(groupId || userId);
@@ -68,16 +86,22 @@ async function handleMessage(event) {
       `🔗 ${calendarLink}`
     );
   } catch (err) {
-    console.error(err);
+    console.error('[calendar] create event failed:', err);
     await reply(replyToken, '行程建立失敗，請稍後再試。');
   }
 }
 
 async function reply(replyToken, text) {
-  await client.replyMessage({
-    replyToken,
-    messages: [{ type: 'text', text }],
-  });
+  try {
+    await client.replyMessage({
+      replyToken,
+      messages: [{ type: 'text', text }],
+    });
+  } catch (err) {
+    console.error('[line] reply failed:', err.message);
+    if (err.body) console.error('[line] reply body:', err.body);
+    throw err;
+  }
 }
 
 const PORT = process.env.PORT || 3000;
