@@ -44,14 +44,16 @@ async function createCalendarEvent(parsed, attendeeEmails) {
   const startDateTime = `${parsed.date}T${parsed.time}:00+08:00`;
   const endDateTime = `${parsed.date}T${parsed.endTime}:00+08:00`;
 
-  const attendees = attendeeEmails.map(email => ({ email }));
+  const description = attendeeEmails.length > 0
+    ? `參與成員：\n${attendeeEmails.join('\n')}`
+    : '';
 
   const event = {
     summary: parsed.title,
     location: parsed.location || '',
+    description,
     start: { dateTime: startDateTime, timeZone: 'Asia/Taipei' },
     end: { dateTime: endDateTime, timeZone: 'Asia/Taipei' },
-    attendees,
     reminders: {
       useDefault: false,
       overrides: [{ method: 'popup', minutes: 30 }],
@@ -61,7 +63,6 @@ async function createCalendarEvent(parsed, attendeeEmails) {
   const response = await calendar.events.insert({
     calendarId: process.env.CALENDAR_ID || 'primary',
     resource: event,
-    sendUpdates: 'all',
   });
 
   return response.data.htmlLink;
