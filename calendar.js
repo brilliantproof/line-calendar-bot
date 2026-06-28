@@ -89,4 +89,60 @@ async function createCalendarEvent(parsed, attendeeEmails) {
   return response.data.htmlLink;
 }
 
-module.exports = { createCalendarEvent, addUserEmail, getUserEmails };
+async function getCalendarEvents(startDate, endDate) {
+  const calendar = google.calendar({
+    version: 'v3',
+    auth: getAuth(['https://www.googleapis.com/auth/calendar']),
+  });
+
+  const response = await calendar.events.list({
+    calendarId: process.env.CALENDAR_ID || 'primary',
+    timeMin: new Date(`${startDate}T00:00:00+08:00`).toISOString(),
+    timeMax: new Date(`${endDate}T23:59:59+08:00`).toISOString(),
+    singleEvents: true,
+    orderBy: 'startTime',
+  });
+
+  return response.data.items || [];
+}
+
+async function cancelCalendarEvent(title, date, time) {
+  const calendar = google.calendar({
+    version: 'v3',
+    auth: getAuth(['https://www.googleapis.com/auth/calendar']),
+  });
+
+  // 搜尋範圍：當天
+  const response = await calendar.events.list({
+    calendarId: process.env.CALENDAR_ID || 'primary',
+    timeMin: new Date(`${date}T00:00:00+08:00`).toISOString(),
+    timeMax: new Date(`${date}T23:59:59+08:00`).toISOString(),
+    singleEvents: true,
+    orderBy: 'startTime',
+  });
+
+  const events = response.data.items || [];
+  const keyword = title.toLowerCase();
+
+  // 找符合關鍵字的事件
+  const matched = events.filter(e => {
+    const nameMatch = e.summary && e.summary.toLowerCase().includes(keyword);
+    if (!time) return nameMatch;
+    const eventTime = e.start?.dateTime
+      ? new Date(e.start.dateTime).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Taipei' })
+      : null;
+    return nameMatch && (!eventTime || eventTime === time);
+  });
+
+  if (matched.length === 0) return null;
+
+  // 刪除第一個符合的
+  await calendar.events.delete({
+    calendarId: process.env.CALENDAR_ID || 'primary',
+    eventId: matched[0].id,
+  });
+
+  return matched[0].summary;
+}
+
+module.exports = { createCalendarEvent, addUserEmail, getUserEmails, getCalendarEvents, cancelCalendarEvent };
