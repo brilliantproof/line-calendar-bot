@@ -71,11 +71,11 @@ async function handleMessage(event) {
 
   try {
     const emails = await getUserEmails(groupId || userId);
-    const calendarLink = await createCalendarEvent(parsed, emails);
+    await createCalendarEvent(parsed, emails);
 
     const attendeeInfo = emails.length > 0
-      ? `👥 已邀請 ${emails.length} 位成員`
-      : '（尚未有人登記 email，輸入 /register your@gmail.com 來加入邀請）';
+      ? `👥 ${emails.length} 位成員已記錄`
+      : '（尚未有人登記 email，輸入 /register your@gmail.com 來加入）';
 
     await reply(replyToken,
       `✅ 行程已建立！\n\n` +
@@ -83,7 +83,7 @@ async function handleMessage(event) {
       `📅 ${parsed.date} ${parsed.time}\n` +
       `📍 ${parsed.location || '未指定地點'}\n` +
       `${attendeeInfo}\n\n` +
-      `🔗 ${calendarLink}`
+      `請開啟 Google 行事曆查看。`
     );
   } catch (err) {
     console.error('[calendar] create event failed:', err);
