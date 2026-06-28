@@ -1,6 +1,9 @@
 const { google } = require('googleapis');
 const fs = require('fs');
 
+const CAL_SCOPES = ['https://www.googleapis.com/auth/calendar'];
+const SHEET_SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
+
 function getAuth(scopes) {
   const credentials = process.env.GOOGLE_SERVICE_ACCOUNT_KEY
     ? JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY)
@@ -8,113 +11,101 @@ function getAuth(scopes) {
   return new google.auth.GoogleAuth({ credentials, scopes });
 }
 
-// ── Google Sheets 當資料庫 ──────────────────────────────
-const SHEET_ID = process.env.SHEET_ID;
-const SHEET_SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
+function getCalClient() {
+  return google.calendar({ version: 'v3', auth: getAuth(CAL_SCOPES) });
+}
 
+// ── Google Sheets：存 contextId → calendarId ──────────────
 async function getSheetsClient() {
   return google.sheets({ version: 'v4', auth: getAuth(SHEET_SCOPES) });
 }
 
-async function addUserEmail(userId, email) {
+async function getCalendarIdForContext(contextId) {
   const sheets = await getSheetsClient();
-  // 先讀取現有資料，避免重複
   const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: SHEET_ID,
+    spreadsheetId: process.env.SHEET_ID,
     range: 'A:B',
   });
   const rows = res.data.values || [];
-  const exists = rows.some(row => row[0] === userId);
-  if (exists) {
-    // 更新現有的
-    const rowIndex = rows.findIndex(row => row[0] === userId) + 1;
+  const row = rows.find(r => r[0] === contextId);
+  return row ? row[1] : null;
+}
+
+async function saveCalendarIdForContext(contextId, calendarId) {
+  const sheets = await getSheetsClient();
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: process.env.SHEET_ID,
+    range: 'A:B',
+  });
+  const rows = res.data.values || [];
+  const rowIndex = rows.findIndex(r => r[0] === contextId);
+  if (rowIndex >= 0) {
     await sheets.spreadsheets.values.update({
-      spreadsheetId: SHEET_ID,
-      range: `B${rowIndex}`,
+      spreadsheetId: process.env.SHEET_ID,
+      range: `B${rowIndex + 1}`,
       valueInputOption: 'RAW',
-      resource: { values: [[email]] },
+      resource: { values: [[calendarId]] },
     });
   } else {
-    // 新增一列
     await sheets.spreadsheets.values.append({
-      spreadsheetId: SHEET_ID,
+      spreadsheetId: process.env.SHEET_ID,
       range: 'A:B',
       valueInputOption: 'RAW',
-      resource: { values: [[userId, email]] },
+      resource: { values: [[contextId, calendarId]] },
     });
   }
 }
 
-async function getUserEmails() {
-  const sheets = await getSheetsClient();
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: SHEET_ID,
-    range: 'B:B',
+// ── 建立新行事曆 ────────────────────────────────────────
+async function createCalendarForContext(contextId, name) {
+  const calendar = getCalClient();
+  const cal = await calendar.calendars.insert({
+    resource: { summary: name, timeZone: 'Asia/Taipei' },
   });
-  const rows = res.data.values || [];
-  return rows.map(r => r[0]).filter(Boolean);
+  const calendarId = cal.data.id;
+  await saveCalendarIdForContext(contextId, calendarId);
+  return calendarId;
 }
 
-// ── Google Calendar ────────────────────────────────────
-async function createCalendarEvent(parsed, attendeeEmails) {
-  const calendar = google.calendar({
-    version: 'v3',
-    auth: getAuth(['https://www.googleapis.com/auth/calendar']),
-  });
+function getSubscribeLink(calendarId) {
+  return `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(calendarId)}`;
+}
 
+// ── 行事曆 CRUD ─────────────────────────────────────────
+async function createCalendarEvent(parsed, calendarId) {
+  const calendar = getCalClient();
   const startDateTime = `${parsed.date}T${parsed.time}:00+08:00`;
   const endDateTime = `${parsed.date}T${parsed.endTime}:00+08:00`;
 
-  const description = attendeeEmails.length > 0
-    ? `參與成員：\n${attendeeEmails.join('\n')}`
-    : '';
-
-  const event = {
-    summary: parsed.title,
-    location: parsed.location || '',
-    description,
-    start: { dateTime: startDateTime, timeZone: 'Asia/Taipei' },
-    end: { dateTime: endDateTime, timeZone: 'Asia/Taipei' },
-    reminders: {
-      useDefault: false,
-      overrides: [{ method: 'popup', minutes: 30 }],
-    },
-  };
-
   const response = await calendar.events.insert({
-    calendarId: process.env.CALENDAR_ID || 'primary',
-    resource: event,
+    calendarId,
+    resource: {
+      summary: parsed.title,
+      location: parsed.location || '',
+      start: { dateTime: startDateTime, timeZone: 'Asia/Taipei' },
+      end: { dateTime: endDateTime, timeZone: 'Asia/Taipei' },
+      reminders: { useDefault: false, overrides: [{ method: 'popup', minutes: 30 }] },
+    },
   });
-
   return response.data.htmlLink;
 }
 
-async function getCalendarEvents(startDate, endDate) {
-  const calendar = google.calendar({
-    version: 'v3',
-    auth: getAuth(['https://www.googleapis.com/auth/calendar']),
-  });
-
+async function getCalendarEvents(calendarId, startDate, endDate) {
+  const calendar = getCalClient();
   const response = await calendar.events.list({
-    calendarId: process.env.CALENDAR_ID || 'primary',
+    calendarId,
     timeMin: new Date(`${startDate}T00:00:00+08:00`).toISOString(),
     timeMax: new Date(`${endDate}T23:59:59+08:00`).toISOString(),
     singleEvents: true,
     orderBy: 'startTime',
   });
-
   return response.data.items || [];
 }
 
-async function cancelCalendarEvent(title, date, time) {
-  const calendar = google.calendar({
-    version: 'v3',
-    auth: getAuth(['https://www.googleapis.com/auth/calendar']),
-  });
-
-  // 搜尋範圍：當天
+async function cancelCalendarEvent(calendarId, title, date, time) {
+  const calendar = getCalClient();
   const response = await calendar.events.list({
-    calendarId: process.env.CALENDAR_ID || 'primary',
+    calendarId,
     timeMin: new Date(`${date}T00:00:00+08:00`).toISOString(),
     timeMax: new Date(`${date}T23:59:59+08:00`).toISOString(),
     singleEvents: true,
@@ -123,8 +114,6 @@ async function cancelCalendarEvent(title, date, time) {
 
   const events = response.data.items || [];
   const keyword = title.toLowerCase();
-
-  // 找符合關鍵字的事件
   const matched = events.filter(e => {
     const nameMatch = e.summary && e.summary.toLowerCase().includes(keyword);
     if (!time) return nameMatch;
@@ -135,14 +124,15 @@ async function cancelCalendarEvent(title, date, time) {
   });
 
   if (matched.length === 0) return null;
-
-  // 刪除第一個符合的
-  await calendar.events.delete({
-    calendarId: process.env.CALENDAR_ID || 'primary',
-    eventId: matched[0].id,
-  });
-
+  await calendar.events.delete({ calendarId, eventId: matched[0].id });
   return matched[0].summary;
 }
 
-module.exports = { createCalendarEvent, addUserEmail, getUserEmails, getCalendarEvents, cancelCalendarEvent };
+module.exports = {
+  getCalendarIdForContext,
+  createCalendarForContext,
+  getSubscribeLink,
+  createCalendarEvent,
+  getCalendarEvents,
+  cancelCalendarEvent,
+};
