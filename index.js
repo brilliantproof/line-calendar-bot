@@ -30,7 +30,6 @@ app.post('/webhook', line.middleware(lineConfig), async (req, res) => {
   }
 });
 
-// 用戶第一次加 Bot 好友
 async function handleFollow(event) {
   const link = getSubscribeLink(process.env.CALENDAR_ID);
   await reply(event.replyToken,
@@ -42,7 +41,6 @@ async function handleFollow(event) {
   );
 }
 
-// Bot 被加入群組
 async function handleJoin(event) {
   const link = getSubscribeLink(process.env.CALENDAR_ID);
   await reply(event.replyToken,
@@ -60,7 +58,6 @@ async function handleMessage(event) {
 
   console.log(`[message] ${text}`);
 
-  // 指令：登記 email
   if (text.startsWith('/register ')) {
     const email = text.replace('/register ', '').trim();
     if (!email.includes('@')) return reply(replyToken, '格式錯誤，請輸入：/register your@gmail.com');
@@ -68,37 +65,29 @@ async function handleMessage(event) {
     return reply(replyToken, `已登記 ${email}，之後建立行程時會記錄你！`);
   }
 
-  // 指令：查看已登記成員
   if (text === '/members') {
     const emails = await getUserEmails();
     if (emails.length === 0) return reply(replyToken, '目前沒有人登記 email，請輸入 /register your@gmail.com');
     return reply(replyToken, `已登記成員：\n${emails.join('\n')}`);
   }
 
-  // 指令：取得訂閱連結
   if (text === '/subscribe') {
     const link = getSubscribeLink(process.env.CALENDAR_ID);
     return reply(replyToken, `點這裡訂閱共用行事曆（只需一次）：\n${link}`);
   }
 
-  // AI 判斷意圖
   const parsed = await parseMessage(text);
   if (!parsed) return;
 
-  if (parsed.action === 'create') {
-    const emails = await getUserEmails();
-    await createCalendarEvent(parsed, emails);
-    const attendeeInfo = emails.length > 0
-      ? `👥 ${emails.length} 位成員已記錄`
-      : '（尚未有人登記 email，輸入 /register your@gmail.com）';
-    return reply(replyToken,
-      `✅ 行程已建立！\n\n📌 ${parsed.title}\n📅 ${parsed.date} ${parsed.time}\n📍 ${parsed.location || '未指定地點'}\n${attendeeInfo}\n\n請開啟 Google 行事曆查看。`
-    );
-  }
+  // 統一成 array，支援一句話多個行程
+  const actions = Array.isArray(parsed) ? parsed : [parsed];
 
-  if (parsed.action === 'query') {
-    const events = await getCalendarEvents(parsed.startDate, parsed.endDate);
-    if (events.length === 0) return reply(replyToken, `📅 ${parsed.startDate} ~ ${parsed.endDate} 沒有任何行程。`);
+  // 查詢 / 取消 只取第一個（不會有多個）
+  const first = actions[0];
+
+  if (first.action === 'query') {
+    const events = await getCalendarEvents(first.startDate, first.endDate);
+    if (events.length === 0) return reply(replyToken, `📅 ${first.startDate} ~ ${first.endDate} 沒有任何行程。`);
     const list = events.map(e => {
       const time = e.start?.dateTime
         ? new Date(e.start.dateTime).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Taipei' })
@@ -108,10 +97,27 @@ async function handleMessage(event) {
     return reply(replyToken, `📅 行程列表：\n\n${list}`);
   }
 
-  if (parsed.action === 'cancel') {
-    const deleted = await cancelCalendarEvent(parsed.title, parsed.date, parsed.time);
-    if (!deleted) return reply(replyToken, `找不到符合的行程：「${parsed.title}」（${parsed.date}）`);
+  if (first.action === 'cancel') {
+    const deleted = await cancelCalendarEvent(first.title, first.date, first.time);
+    if (!deleted) return reply(replyToken, `找不到符合的行程：「${first.title}」（${first.date}）`);
     return reply(replyToken, `🗑️ 已取消行程：${deleted}`);
+  }
+
+  if (actions.some(a => a.action === 'create')) {
+    const emails = await getUserEmails();
+    const attendeeInfo = emails.length > 0
+      ? `👥 ${emails.length} 位成員已記錄`
+      : '（尚未有人登記 email，輸入 /register your@gmail.com）';
+
+    const creates = actions.filter(a => a.action === 'create');
+    const lines = [];
+    for (const a of creates) {
+      await createCalendarEvent(a, emails);
+      lines.push(`📌 ${a.title}\n📅 ${a.date} ${a.time}\n📍 ${a.location || '未指定地點'}`);
+    }
+
+    const header = creates.length > 1 ? `✅ ${creates.length} 個行程已建立！` : `✅ 行程已建立！`;
+    return reply(replyToken, `${header}\n\n${lines.join('\n\n')}\n\n${attendeeInfo}\n\n請開啟 Google 行事曆查看。`);
   }
 }
 

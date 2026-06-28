@@ -23,10 +23,20 @@ async function parseMessage(text) {
 3. cancel（取消行程）：要取消或刪除某個行程
 4. null（與行程無關）
 
+若訊息包含【多個行程】，每個行程各回傳一個物件，組成 JSON array。
+若只有一個行程或意圖，回傳單一 JSON 物件。
+與行程無關時，回傳 null。
+
 回傳格式（純 JSON，不加任何說明）：
 
-新增行程：
+單一新增行程：
 {"action":"create","title":"行程名稱","date":"YYYY-MM-DD","time":"HH:MM","endTime":"HH:MM","location":"地點或null"}
+
+多個新增行程（array）：
+[
+  {"action":"create","title":"行程名稱","date":"YYYY-MM-DD","time":"HH:MM","endTime":"HH:MM","location":"地點或null"},
+  {"action":"create","title":"行程名稱","date":"YYYY-MM-DD","time":"HH:MM","endTime":"HH:MM","location":"地點或null"}
+]
 
 查詢行程：
 {"action":"query","startDate":"YYYY-MM-DD","endDate":"YYYY-MM-DD"}
@@ -42,6 +52,7 @@ null
 - 「今天」「明天」「後天」請換算成實際日期
 - 「下週」= 下週一到週日
 - 取消時 time 若沒說清楚填 null
+- endTime 若沒說清楚，填 null（程式會自動加一小時）
 - 只回傳 JSON，不加任何文字
 `;
 

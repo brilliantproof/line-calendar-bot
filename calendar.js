@@ -8,7 +8,13 @@ function getAuth(scopes) {
   return new google.auth.GoogleAuth({ credentials, scopes });
 }
 
-// ── Google Sheets 當資料庫 ──────────────────────────────
+function addOneHour(time) {
+  const [h, m] = time.split(':').map(Number);
+  const endH = (h + 1) % 24;
+  return `${String(endH).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+// ── Google Sheets 當資料庫 ──────────────────────────────────────────────────
 const SHEET_ID = process.env.SHEET_ID;
 const SHEET_SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
 
@@ -52,7 +58,7 @@ async function getUserEmails() {
   return rows.map(r => r[0]).filter(Boolean);
 }
 
-// ── Google Calendar ────────────────────────────────────
+// ── Google Calendar ──────────────────────────────────────────────────────────
 function getSubscribeLink(calendarId) {
   return `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(calendarId)}`;
 }
@@ -64,27 +70,26 @@ async function createCalendarEvent(parsed, attendeeEmails) {
   });
 
   const startDateTime = `${parsed.date}T${parsed.time}:00+08:00`;
-  const endDateTime = `${parsed.date}T${parsed.endTime}:00+08:00`;
+  const endTime = parsed.endTime || addOneHour(parsed.time);
+  const endDateTime = `${parsed.date}T${endTime}:00+08:00`;
 
   const description = attendeeEmails.length > 0
     ? `參與成員：\n${attendeeEmails.join('\n')}`
     : '';
 
-  const event = {
-    summary: parsed.title,
-    location: parsed.location || '',
-    description,
-    start: { dateTime: startDateTime, timeZone: 'Asia/Taipei' },
-    end: { dateTime: endDateTime, timeZone: 'Asia/Taipei' },
-    reminders: {
-      useDefault: false,
-      overrides: [{ method: 'popup', minutes: 30 }],
-    },
-  };
-
   const response = await calendar.events.insert({
     calendarId: process.env.CALENDAR_ID || 'primary',
-    resource: event,
+    resource: {
+      summary: parsed.title,
+      location: parsed.location || '',
+      description,
+      start: { dateTime: startDateTime, timeZone: 'Asia/Taipei' },
+      end: { dateTime: endDateTime, timeZone: 'Asia/Taipei' },
+      reminders: {
+        useDefault: false,
+        overrides: [{ method: 'popup', minutes: 30 }],
+      },
+    },
   });
 
   return response.data.htmlLink;
