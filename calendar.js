@@ -14,7 +14,12 @@ function addOneHour(time) {
   return `${String(endH).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
-// ── Google Sheets 當資料庫 ──────────────────────────────────────────────────
+function toStringOrNull(val) {
+  if (!val || val === 'null') return null;
+  return val;
+}
+
+// Google Sheets：userId → email
 const SHEET_ID = process.env.SHEET_ID;
 const SHEET_SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
 
@@ -58,7 +63,7 @@ async function getUserEmails() {
   return rows.map(r => r[0]).filter(Boolean);
 }
 
-// ── Google Calendar ──────────────────────────────────────────────────────────
+// Google Calendar
 function getSubscribeLink(calendarId) {
   return `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(calendarId)}`;
 }
@@ -70,8 +75,9 @@ async function createCalendarEvent(parsed, attendeeEmails) {
   });
 
   const startDateTime = `${parsed.date}T${parsed.time}:00+08:00`;
-  const endTime = parsed.endTime || addOneHour(parsed.time);
+  const endTime = toStringOrNull(parsed.endTime) || addOneHour(parsed.time);
   const endDateTime = `${parsed.date}T${endTime}:00+08:00`;
+  const location = toStringOrNull(parsed.location) || '';
 
   const description = attendeeEmails.length > 0
     ? `參與成員：\n${attendeeEmails.join('\n')}`
@@ -81,7 +87,7 @@ async function createCalendarEvent(parsed, attendeeEmails) {
     calendarId: process.env.CALENDAR_ID || 'primary',
     resource: {
       summary: parsed.title,
-      location: parsed.location || '',
+      location,
       description,
       start: { dateTime: startDateTime, timeZone: 'Asia/Taipei' },
       end: { dateTime: endDateTime, timeZone: 'Asia/Taipei' },
