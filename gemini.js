@@ -72,7 +72,7 @@ null
     const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     return JSON.parse(cleaned);
   } catch (e) {
-    console.error('Gemini 解析失敗:', e.message);
+    console.error(`[ERROR] Gemini parse failed for text="${text}" error=${e.message}`);
     return null;
   }
 }

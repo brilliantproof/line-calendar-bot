@@ -25,7 +25,10 @@ app.post('/webhook', line.middleware(lineConfig), async (req, res) => {
       else if (event.type === 'join') await handleJoin(event);
       else if (event.type === 'message' && event.message.type === 'text') await handleMessage(event);
     } catch (err) {
-      console.error('[webhook] error:', err.message);
+      const ctx = event.source?.groupId || event.source?.userId || 'unknown';
+      const msg = event.message?.text || '(non-text)';
+      console.error(`[ERROR] ctx=${ctx} msg="${msg}" error=${err.message}`);
+      console.error(err.stack);
     }
   }
 });
@@ -55,8 +58,9 @@ async function handleMessage(event) {
   const text = event.message.text.trim();
   const replyToken = event.replyToken;
   const userId = event.source.userId;
+  const contextId = event.source.groupId || event.source.roomId || userId;
 
-  console.log(`[message] ${text}`);
+  console.log(`[msg] ctx=${contextId} text="${text}"`);
 
   if (text.startsWith('/register ')) {
     const email = text.replace('/register ', '').trim();
@@ -77,11 +81,14 @@ async function handleMessage(event) {
   }
 
   const parsed = await parseMessage(text);
-  if (!parsed) return;
+  if (!parsed) {
+    console.log(`[msg] ctx=${contextId} -> no action (unrelated or parse failed)`);
+    return;
+  }
 
-  // 統一成 array，支援一句話多個行程
   const actions = Array.isArray(parsed) ? parsed : [parsed];
   const first = actions[0];
+  console.log(`[msg] ctx=${contextId} -> action=${first.action} count=${actions.length}`);
 
   if (first.action === 'need_info') {
     return reply(replyToken,
@@ -132,7 +139,7 @@ async function reply(replyToken, text) {
   try {
     await client.replyMessage({ replyToken, messages: [{ type: 'text', text }] });
   } catch (err) {
-    console.error('[line] reply failed:', err.message);
+    console.error(`[ERROR] reply failed: ${err.message}`);
   }
 }
 
