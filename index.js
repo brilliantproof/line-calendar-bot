@@ -33,21 +33,21 @@ app.post('/webhook', line.middleware(lineConfig), async (req, res) => {
 async function handleFollow(event) {
   const link = getSubscribeLink(process.env.CALENDAR_ID);
   await reply(event.replyToken,
-    `你好！我是行程小幫手 📅\n\n` +
-    `請點以下連結訂閱共用行事曆（只需做一次）：\n${link}\n\n` +
-    `訂閱後，跟我說任何行程，就會自動出現在你的 Google 行事曆裡。\n\n` +
-    `也可以輸入 /register your@gmail.com 登記你的 email。\n\n` +
-    `試試看：「明天下午三點開會」`
+    '你好！我是行程小幫手 📅\n\n' +
+    '請點以下連結訂閱共用行事曆（只需做一次）：\n' + link + '\n\n' +
+    '訂閱後，跟我說任何行程，就會自動出現在你的 Google 行事曆裡。\n\n' +
+    '也可以輸入 /register your@gmail.com 登記你的 email。\n\n' +
+    '試試看：「明天下午三點開會」'
   );
 }
 
 async function handleJoin(event) {
   const link = getSubscribeLink(process.env.CALENDAR_ID);
   await reply(event.replyToken,
-    `大家好！我是行程小幫手 📅\n\n` +
-    `請每位成員點以下連結訂閱共用行事曆（每人只需做一次）：\n${link}\n\n` +
-    `訂閱後，跟我說任何行程，就會自動出現在大家的 Google 行事曆裡。\n\n` +
-    `試試看：「明天下午三點開會」`
+    '大家好！我是行程小幫手 📅\n\n' +
+    '請每位成員點以下連結訂閱共用行事曆（每人只需做一次）：\n' + link + '\n\n' +
+    '訂閱後，跟我說任何行程，就會自動出現在大家的 Google 行事曆裡。\n\n' +
+    '試試看：「明天下午三點開會」'
   );
 }
 
@@ -62,18 +62,18 @@ async function handleMessage(event) {
     const email = text.replace('/register ', '').trim();
     if (!email.includes('@')) return reply(replyToken, '格式錯誤，請輸入：/register your@gmail.com');
     await addUserEmail(userId, email);
-    return reply(replyToken, `已登記 ${email}，之後建立行程時會記錄你！`);
+    return reply(replyToken, '已登記 ' + email + '，之後建立行程時會記錄你！');
   }
 
   if (text === '/members') {
     const emails = await getUserEmails();
     if (emails.length === 0) return reply(replyToken, '目前沒有人登記 email，請輸入 /register your@gmail.com');
-    return reply(replyToken, `已登記成員：\n${emails.join('\n')}`);
+    return reply(replyToken, '已登記成員：\n' + emails.join('\n'));
   }
 
   if (text === '/subscribe') {
     const link = getSubscribeLink(process.env.CALENDAR_ID);
-    return reply(replyToken, `點這裡訂閱共用行事曆（只需一次）：\n${link}`);
+    return reply(replyToken, '點這裡訂閱共用行事曆（只需一次）：\n' + link);
   }
 
   const parsed = await parseMessage(text);
@@ -81,43 +81,50 @@ async function handleMessage(event) {
 
   // 統一成 array，支援一句話多個行程
   const actions = Array.isArray(parsed) ? parsed : [parsed];
-
-  // 查詢 / 取消 只取第一個（不會有多個）
   const first = actions[0];
+
+  if (first.action === 'need_info') {
+    return reply(replyToken,
+      '請告訴我行程的時間和內容！📅\n\n' +
+      '例如：\n' +
+      '「明天下午三點開會」\n' +
+      '「週六上午十點到十二點 社子島導覽」'
+    );
+  }
 
   if (first.action === 'query') {
     const events = await getCalendarEvents(first.startDate, first.endDate);
-    if (events.length === 0) return reply(replyToken, `📅 ${first.startDate} ~ ${first.endDate} 沒有任何行程。`);
+    if (events.length === 0) return reply(replyToken, '📅 ' + first.startDate + ' ~ ' + first.endDate + ' 沒有任何行程。');
     const list = events.map(e => {
       const time = e.start?.dateTime
         ? new Date(e.start.dateTime).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Taipei' })
         : e.start?.date;
-      return `• ${time} ${e.summary}`;
+      return '• ' + time + ' ' + e.summary;
     }).join('\n');
-    return reply(replyToken, `📅 行程列表：\n\n${list}`);
+    return reply(replyToken, '📅 行程列表：\n\n' + list);
   }
 
   if (first.action === 'cancel') {
     const deleted = await cancelCalendarEvent(first.title, first.date, first.time);
-    if (!deleted) return reply(replyToken, `找不到符合的行程：「${first.title}」（${first.date}）`);
-    return reply(replyToken, `🗑️ 已取消行程：${deleted}`);
+    if (!deleted) return reply(replyToken, '找不到符合的行程：「' + first.title + '」（' + first.date + '）');
+    return reply(replyToken, '🗑️ 已取消行程：' + deleted);
   }
 
   if (actions.some(a => a.action === 'create')) {
     const emails = await getUserEmails();
     const attendeeInfo = emails.length > 0
-      ? `👥 ${emails.length} 位成員已記錄`
+      ? '👥 ' + emails.length + ' 位成員已記錄'
       : '（尚未有人登記 email，輸入 /register your@gmail.com）';
 
     const creates = actions.filter(a => a.action === 'create');
     const lines = [];
     for (const a of creates) {
       await createCalendarEvent(a, emails);
-      lines.push(`📌 ${a.title}\n📅 ${a.date} ${a.time}\n📍 ${a.location || '未指定地點'}`);
+      lines.push('📌 ' + a.title + '\n📅 ' + a.date + ' ' + a.time + '\n📍 ' + (a.location || '未指定地點'));
     }
 
-    const header = creates.length > 1 ? `✅ ${creates.length} 個行程已建立！` : `✅ 行程已建立！`;
-    return reply(replyToken, `${header}\n\n${lines.join('\n\n')}\n\n${attendeeInfo}\n\n請開啟 Google 行事曆查看。`);
+    const header = creates.length > 1 ? '✅ ' + creates.length + ' 個行程已建立！' : '✅ 行程已建立！';
+    return reply(replyToken, header + '\n\n' + lines.join('\n\n') + '\n\n' + attendeeInfo + '\n\n請開啟 Google 行事曆查看。');
   }
 }
 

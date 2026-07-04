@@ -21,26 +21,26 @@ async function parseMessage(text) {
 1. create（新增行程）：包含具體時間和事件
 2. query（查詢行程）：詢問某段時間有什麼行程
 3. cancel（取消行程）：要取消或刪除某個行程
-4. null（與行程無關）
+4. need_info（用戶想建立行程，但沒有提供具體時間）
+5. null（與行程完全無關）
 
 視訊息中包含的行程數量，回傳對應結構：
 - 只有 1 個行程：回傳單一 JSON 物件
 - 有 2 個或以上行程：回傳 JSON array，每個行程一個物件，有幾個就放幾個
-- 與行程無關：回傳 null
+- 與行程完全無關：回傳 null
 
 範例（純 JSON，不加任何說明文字）：
 
 單一行程（endTime 和 location 有說清楚）：
 {"action":"create","title":"開會","date":"2026-07-03","time":"15:00","endTime":"16:00","location":"台北辦公室"}
 
-單一行程（endTime 或 location 不清楚時用 JSON null，不是字串）：
+單一行程（endTime 或 location 不清楚時用 JSON null）：
 {"action":"create","title":"去超市","date":"2026-07-03","time":"18:00","endTime":null,"location":null}
 
 多個行程（不限數量，有幾個就放幾個）：
 [
   {"action":"create","title":"第一個行程","date":"2026-07-03","time":"08:00","endTime":"09:00","location":null},
-  {"action":"create","title":"第二個行程","date":"2026-07-03","time":"15:00","endTime":null,"location":"捷運站"},
-  {"action":"create","title":"第三個行程","date":"2026-07-03","time":"20:00","endTime":null,"location":null}
+  {"action":"create","title":"第二個行程","date":"2026-07-03","time":"15:00","endTime":null,"location":"捧運站"}
 ]
 
 查詢行程：
@@ -49,6 +49,9 @@ async function parseMessage(text) {
 取消行程：
 {"action":"cancel","title":"開會","date":"2026-07-03","time":null}
 
+想建立行程但缺少時間等資訊（例如「請幫我建立行程」「新增一個行程」）：
+{"action":"need_info"}
+
 無關：
 null
 
@@ -56,8 +59,8 @@ null
 - 「這週」= 本週一到週日
 - 「今天」「明天」「後天」請換算成實際日期
 - 「下週」= 下週一到週日
-- endTime 若沒說清楚填 null（不是字串 "null"，是 JSON null）
-- location 若沒說清楚填 null（不是字串 "null"，是 JSON null）
+- endTime 若沒說清楚填 null（JSON null，不是字串）
+- location 若沒說清楚填 null（JSON null，不是字串）
 - 取消時 time 若沒說清楚填 null
 - 只回傳 JSON，不加任何文字
 `;
