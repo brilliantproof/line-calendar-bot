@@ -144,14 +144,27 @@ async function handleMessage(event) {
       : '（尚未有人登記 email，輸入 /register your@gmail.com）';
 
     const creates = actions.filter(a => a.action === 'create');
+    const valid = creates.filter(a => a.date && a.time);
+    const skipped = creates.length - valid.length;
+
+    if (valid.length === 0) {
+      return reply(replyToken,
+        '請告訴我行程的時間和內容！📅\n\n' +
+        '例如：\n' +
+        '「明天下午三點開會」\n' +
+        '「週六上午十點到十二點 社子島導覽」'
+      );
+    }
+
     const lines = [];
-    for (const a of creates) {
+    for (const a of valid) {
       await createCalendarEvent(a, emails);
       lines.push('📌 ' + a.title + '\n📅 ' + a.date + ' ' + a.time + '\n📍 ' + (a.location || '未指定地點'));
     }
 
-    const header = creates.length > 1 ? '✅ ' + creates.length + ' 個行程已建立！' : '✅ 行程已建立！';
-    return reply(replyToken, header + '\n\n' + lines.join('\n\n') + '\n\n' + attendeeInfo + '\n\n請開啟 Google 行事曆查看。');
+    const header = valid.length > 1 ? '✅ ' + valid.length + ' 個行程已建立！' : '✅ 行程已建立！';
+    const skippedNote = skipped > 0 ? '\n\n⚠️ 另外 ' + skipped + ' 項因為沒有明確時間，已略過。' : '';
+    return reply(replyToken, header + '\n\n' + lines.join('\n\n') + '\n\n' + attendeeInfo + skippedNote + '\n\n請開啟 Google 行事曆查看。');
   }
 }
 

@@ -9,6 +9,7 @@ function getAuth(scopes) {
 }
 
 function addOneHour(time) {
+  if (!time || typeof time !== 'string' || !time.includes(':')) return null;
   const [h, m] = time.split(':').map(Number);
   const endH = (h + 1) % 24;
   return `${String(endH).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
