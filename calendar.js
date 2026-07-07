@@ -78,6 +78,17 @@ async function addNote(text, context, source) {
   });
 }
 
+async function getNotesToday(context) {
+  const sheets = await getSheetsClient();
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_ID,
+    range: `${NOTES_SHEET}!A:E`,
+  });
+  const rows = (res.data.values || []).slice(1); // 跳過標題列
+  const todayStr = new Date().toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei' });
+  return rows.filter(row => row[0] && row[0].startsWith(todayStr) && row[2] === context);
+}
+
 // Google Sheets：部署自我回報，讓「線上目前是哪個 commit」變成可查詢的紀錄
 const DEPLOYS_SHEET = 'deploys';
 
@@ -200,4 +211,4 @@ async function cancelCalendarEvent(title, date, time) {
   return matched[0].summary;
 }
 
-module.exports = { createCalendarEvent, addUserEmail, getUserEmails, getCalendarEvents, cancelCalendarEvent, getSubscribeLink, addNote, recordDeploy, logEvent };
+module.exports = { createCalendarEvent, addUserEmail, getUserEmails, getCalendarEvents, cancelCalendarEvent, getSubscribeLink, addNote, recordDeploy, logEvent, getNotesToday };

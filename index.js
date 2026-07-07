@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const line = require('@line/bot-sdk');
 const { parseMessage } = require('./gemini');
-const { createCalendarEvent, addUserEmail, getUserEmails, getCalendarEvents, cancelCalendarEvent, getSubscribeLink, addNote, recordDeploy, logEvent } = require('./calendar');
+const { createCalendarEvent, addUserEmail, getUserEmails, getCalendarEvents, cancelCalendarEvent, getSubscribeLink, addNote, recordDeploy, logEvent, getNotesToday } = require('./calendar');
 
 const app = express();
 
@@ -119,6 +119,16 @@ async function handleMessage(event) {
       return '• ' + time + ' ' + e.summary;
     }).join('\n');
     return reply(replyToken, '📅 行程列表：\n\n' + list);
+  }
+
+  if (first.action === 'query_notes') {
+    const notes = await getNotesToday(userId);
+    if (notes.length === 0) return reply(replyToken, '📝 今天還沒有記錄任何筆記。');
+    const list = notes.map(row => {
+      const time = row[0] ? row[0].split(' ')[1] || row[0] : '';
+      return '• ' + time + ' ' + row[1];
+    }).join('\n\n');
+    return reply(replyToken, '📝 今天的筆記（共 ' + notes.length + ' 則）：\n\n' + list);
   }
 
   if (first.action === 'cancel') {
