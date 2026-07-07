@@ -1,4 +1,5 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { logEvent } = require('./calendar');
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({
@@ -73,6 +74,8 @@ null
     return JSON.parse(cleaned);
   } catch (e) {
     console.error(`[ERROR] Gemini parse failed for text="${text}" error=${e.message}`);
+    logEvent('error', 'gemini', `parse failed text="${text}" error=${e.message}`)
+      .catch(logErr => console.error(`[ERROR] logEvent failed: ${logErr.message}`));
     return null;
   }
 }

@@ -78,6 +78,37 @@ async function addNote(text, context, source) {
   });
 }
 
+// Google Sheets：部署自我回報，讓「線上目前是哪個 commit」變成可查詢的紀錄
+const DEPLOYS_SHEET = 'deploys';
+
+async function recordDeploy() {
+  const sheets = await getSheetsClient();
+  const timestamp = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', hour12: false });
+  const commitSha = process.env.RENDER_GIT_COMMIT || 'local';
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: SHEET_ID,
+    range: `${DEPLOYS_SHEET}!A:C`,
+    valueInputOption: 'RAW',
+    insertDataOption: 'INSERT_ROWS',
+    resource: { values: [[timestamp, commitSha, process.env.NODE_ENV || 'production']] },
+  });
+}
+
+// Google Sheets：執行期錯誤紀錄，不再只留在 Render 的即時 log 串流裡
+const LOGS_SHEET = 'logs';
+
+async function logEvent(level, context, message) {
+  const sheets = await getSheetsClient();
+  const timestamp = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', hour12: false });
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: SHEET_ID,
+    range: `${LOGS_SHEET}!A:D`,
+    valueInputOption: 'RAW',
+    insertDataOption: 'INSERT_ROWS',
+    resource: { values: [[timestamp, level, context, message]] },
+  });
+}
+
 // Google Calendar
 function getSubscribeLink(calendarId) {
   return `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(calendarId)}`;
@@ -169,4 +200,4 @@ async function cancelCalendarEvent(title, date, time) {
   return matched[0].summary;
 }
 
-module.exports = { createCalendarEvent, addUserEmail, getUserEmails, getCalendarEvents, cancelCalendarEvent, getSubscribeLink, addNote };
+module.exports = { createCalendarEvent, addUserEmail, getUserEmails, getCalendarEvents, cancelCalendarEvent, getSubscribeLink, addNote, recordDeploy, logEvent };

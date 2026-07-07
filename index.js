@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const line = require('@line/bot-sdk');
 const { parseMessage } = require('./gemini');
-const { createCalendarEvent, addUserEmail, getUserEmails, getCalendarEvents, cancelCalendarEvent, getSubscribeLink, addNote } = require('./calendar');
+const { createCalendarEvent, addUserEmail, getUserEmails, getCalendarEvents, cancelCalendarEvent, getSubscribeLink, addNote, recordDeploy, logEvent } = require('./calendar');
 
 const app = express();
 
@@ -29,6 +29,8 @@ app.post('/webhook', line.middleware(lineConfig), async (req, res) => {
       const msg = event.message?.text || '(non-text)';
       console.error(`[ERROR] ctx=${ctx} msg="${msg}" error=${err.message}`);
       console.error(err.stack);
+      logEvent('error', ctx, `msg="${msg}" error=${err.message}`)
+        .catch(logErr => console.error(`[ERROR] logEvent failed: ${logErr.message}`));
     }
   }
 });
@@ -149,4 +151,7 @@ async function reply(replyToken, text) {
 }
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Bot running on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Bot running on port ${PORT}`);
+  recordDeploy().catch(err => console.error(`[ERROR] recordDeploy failed: ${err.message}`));
+});
