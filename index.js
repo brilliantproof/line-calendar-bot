@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const line = require('@line/bot-sdk');
 const { parseMessage } = require('./gemini');
-const { createCalendarEvent, addUserEmail, getUserEmails, getCalendarEvents, cancelCalendarEvent, getSubscribeLink } = require('./calendar');
+const { createCalendarEvent, addUserEmail, getUserEmails, getCalendarEvents, cancelCalendarEvent, getSubscribeLink, addNote } = require('./calendar');
 
 const app = express();
 
@@ -82,6 +82,11 @@ async function handleMessage(event) {
 
   const parsed = await parseMessage(text);
   if (!parsed) {
+    if (event.source.type === 'user') {
+      await addNote(text, userId, 'text');
+      console.log(`[msg] ctx=${contextId} -> saved as note`);
+      return reply(replyToken, '📝 已記錄');
+    }
     console.log(`[msg] ctx=${contextId} -> no action (unrelated or parse failed)`);
     return;
   }

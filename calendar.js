@@ -63,6 +63,21 @@ async function getUserEmails() {
   return rows.map(r => r[0]).filter(Boolean);
 }
 
+// Google Sheets：筆記 raw log
+const NOTES_SHEET = 'notes';
+
+async function addNote(text, context, source) {
+  const sheets = await getSheetsClient();
+  const timestamp = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', hour12: false });
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: SHEET_ID,
+    range: `${NOTES_SHEET}!A:E`,
+    valueInputOption: 'RAW',
+    insertDataOption: 'INSERT_ROWS',
+    resource: { values: [[timestamp, text, context, '', source]] },
+  });
+}
+
 // Google Calendar
 function getSubscribeLink(calendarId) {
   return `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(calendarId)}`;
@@ -154,4 +169,4 @@ async function cancelCalendarEvent(title, date, time) {
   return matched[0].summary;
 }
 
-module.exports = { createCalendarEvent, addUserEmail, getUserEmails, getCalendarEvents, cancelCalendarEvent, getSubscribeLink };
+module.exports = { createCalendarEvent, addUserEmail, getUserEmails, getCalendarEvents, cancelCalendarEvent, getSubscribeLink, addNote };
