@@ -15,7 +15,10 @@ const client = new line.messagingApi.MessagingApiClient({
   channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
 });
 
+const BOOT_TIME = new Date().toISOString();
+
 app.get('/health', (req, res) => res.json({ ok: true }));
+app.get('/version', (req, res) => res.json({ commit: process.env.RENDER_GIT_COMMIT || 'unknown', bootTime: BOOT_TIME }));
 
 app.post('/webhook', line.middleware(lineConfig), async (req, res) => {
   res.status(200).end();

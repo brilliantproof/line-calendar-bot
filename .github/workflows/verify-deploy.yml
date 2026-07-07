@@ -1,0 +1,25 @@
+name: Verify Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Poll /version until the pushed commit is live
+        run: |
+          EXPECTED="${{ github.sha }}"
+          URL="https://line-calendar-bot-2cdl.onrender.com/version"
+          for i in $(seq 1 20); do
+            ACTUAL=$(curl -s -m 10 "$URL" | jq -r '.commit // empty' || true)
+            if [ "$ACTUAL" = "$EXPECTED" ]; then
+              echo "Deploy verified: commit $ACTUAL is live."
+              exit 0
+            fi
+            echo "Attempt $i/20: live commit is '${ACTUAL:-<no response>}', expected '$EXPECTED'. Retrying in 15s..."
+            sleep 15
+          done
+          echo "Deploy verification FAILED: expected $EXPECTED but it never went live within 5 minutes."
+          exit 1
