@@ -144,7 +144,7 @@ async function handleMessage(event) {
       : '（尚未有人登記 email，輸入 /register your@gmail.com）';
 
     const creates = actions.filter(a => a.action === 'create');
-    const valid = creates.filter(a => a.date && a.time);
+    const valid = creates.filter(a => a.date && (a.time || a.allDay));
     const skipped = creates.length - valid.length;
 
     if (valid.length === 0) {
@@ -159,7 +159,8 @@ async function handleMessage(event) {
     const lines = [];
     for (const a of valid) {
       await createCalendarEvent(a, emails);
-      lines.push('📌 ' + a.title + '\n📅 ' + a.date + ' ' + a.time + '\n📍 ' + (a.location || '未指定地點'));
+      const when = a.allDay || !a.time ? a.date + '（全天）' : a.date + ' ' + a.time;
+      lines.push('📌 ' + a.title + '\n📅 ' + when + '\n📍 ' + (a.location || '未指定地點'));
     }
 
     const header = valid.length > 1 ? '✅ ' + valid.length + ' 個行程已建立！' : '✅ 行程已建立！';

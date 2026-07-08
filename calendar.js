@@ -126,20 +126,30 @@ function getSubscribeLink(calendarId) {
   return `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(calendarId)}`;
 }
 
+function nextDay(dateStr) {
+  const d = new Date(`${dateStr}T00:00:00+08:00`);
+  d.setDate(d.getDate() + 1);
+  return d.toLocaleDateString('sv-SE', { timeZone: 'Asia/Taipei' }); // sv-SE -> YYYY-MM-DD
+}
+
 async function createCalendarEvent(parsed, attendeeEmails) {
   const calendar = google.calendar({
     version: 'v3',
     auth: getAuth(['https://www.googleapis.com/auth/calendar']),
   });
 
-  const startDateTime = `${parsed.date}T${parsed.time}:00+08:00`;
-  const endTime = toStringOrNull(parsed.endTime) || addOneHour(parsed.time);
-  const endDateTime = `${parsed.date}T${endTime}:00+08:00`;
   const location = toStringOrNull(parsed.location) || '';
-
   const description = attendeeEmails.length > 0
     ? `參與成員：\n${attendeeEmails.join('\n')}`
     : '';
+
+  const isAllDay = parsed.allDay === true || !toStringOrNull(parsed.time);
+  const start = isAllDay
+    ? { date: parsed.date }
+    : { dateTime: `${parsed.date}T${parsed.time}:00+08:00`, timeZone: 'Asia/Taipei' };
+  const end = isAllDay
+    ? { date: nextDay(parsed.date) }
+    : { dateTime: `${parsed.date}T${toStringOrNull(parsed.endTime) || addOneHour(parsed.time)}:00+08:00`, timeZone: 'Asia/Taipei' };
 
   const response = await calendar.events.insert({
     calendarId: process.env.CALENDAR_ID || 'primary',
@@ -147,8 +157,8 @@ async function createCalendarEvent(parsed, attendeeEmails) {
       summary: parsed.title,
       location,
       description,
-      start: { dateTime: startDateTime, timeZone: 'Asia/Taipei' },
-      end: { dateTime: endDateTime, timeZone: 'Asia/Taipei' },
+      start,
+      end,
       reminders: {
         useDefault: false,
         overrides: [{ method: 'popup', minutes: 30 }],
