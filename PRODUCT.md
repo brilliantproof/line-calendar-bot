@@ -52,6 +52,24 @@ Google 不允許在未經用戶同意下將行事曆塞入其帳號，訂閱連�
 
 ---
 
+### v4：部署平台從 Render 遷移到 Cloud Run（2026-07-08）
+
+**動機：** Render 免費方案要靠 GitHub Actions 每 5 分鐘 ping 才不會睡眠，而且冷啟動延遲常常超過 LINE reply token 的有效期，導致訊息「已讀但沒反應」。Cloud Run 的 request-based 計費模式下，沒人用時直接縮到零、不計費，也不需要 keep-alive 這種 workaround。
+
+**做了什麼：**
+- 加了 `Dockerfile`、`.dockerignore`，改用 `gcloud run deploy --source .` 部署
+- 環境變數改用 `env.yaml` + `--env-vars-file`，而不是 `--set-env-vars`（`GOOGLE_SERVICE_ACCOUNT_KEY` 是 JSON，內容有逗號，`--set-env-vars` 會照逗號切壞）
+- 目前 Render 和 Cloud Run **同時存在**，LINE Webhook 已切到 Cloud Run，但 Render 還沒關掉（留著當備援，尚未決定何時正式退役）
+
+**踩到的坑（意外發現，但影響重大）：**
+為了讓 Cloud Run 部署成功，必須先在該 GCP project 啟用 billing。但 billing 是掛在整個 project 上，不是掛在單一 API——同一個 project 底下原本跑在免費層的 Gemini API key，因此被悄悄升級成付費 Prepay 方案，而新方案預設餘額是 $0。結果所有 Gemini 呼叫直接失敗（`429 prepayment credits are depleted`），每則 LINE 訊息都解析失敗又沒有任何錯誤提示,使用者只看到「已讀但沒反應」，一度被誤判成程式邏輯 bug。
+
+**修法：** 把 Gemini API key 移到一個獨立、永遠不啟用 billing 的 GCP project，讓它從結構上留在免費層，而不是依賴「記得儲值」。這代表這個專案現在需要**兩個 GCP project**：一個給 Cloud Run/Calendar/Sheets（要 billing），一個給 Gemini（不要 billing）。細節見 [README.md](README.md) 的「部署到 Cloud Run」與「設計決策」。
+
+**驗證方式的落差：** 現有的 `verify-deploy.yml` GitHub Action 只會 poll Render 的 `/version`，沒有涵蓋 Cloud Run。這代表「main 上的 commit 有沒有真的上線」這件事，Render 和 Cloud Run 要分開確認，CHANGELOG.md 已經註記這點——但 CI 本身還沒補上 Cloud Run 的驗證，算是已知的待辦。
+
+---
+
 ## 功能取捨
 
 | 功能 | 狀態 | 原因 |
@@ -87,7 +105,7 @@ Google 不允許在未經用戶同意下將行事曆塞入其帳號，訂閱連�
 | 項目 | 選擇 | 原因 |
 |------|------|------|
 | AI 解析 | Gemini 1.5 Flash | 免費，繁體中文支援好 |
-| 後端 | Node.js + Express on Render | 免費方案，部署簡單 |
+| 後端 | Node.js + Express，Render（舊）+ Cloud Run（現行） | Render 免費方案部署簡單，但冷啟動常拖過 LINE reply token 的有效期；Cloud Run scale-to-zero 沒有這個問題，代價是要多顧一個 GCP project 的 billing 設定，見上方 v4 |
 | 資料庫 | Google Sheets | 不需新帳號，Service Account 已有權限 |
 | 行事曆 | Google Calendar API + Service Account | 自動建立，不需用戶 OAuth |
 | 保持伺服器清醒 | GitHub Actions 每 5 分鐘 ping | 解決 Render 免費方案睡眠問題 |

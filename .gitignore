@@ -2,3 +2,4 @@ node_modules/
 .env
 calendar-bot-key.json
 users.json
+env.yaml
